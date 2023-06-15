@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alias"
+version = "0.0.1"
+authors = [
+    { name = "Joseph Hand", email = "jehand@ku.edu" },
+]
+description = ""
+readme = "README.rst"
+requires-python = ">=3.11"
+classifiers = [
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Astronomy"
+]
+dependencies = [
+
+]
+
+[tool.setuptools]
+packages = ["alias"]

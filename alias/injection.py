@@ -14,7 +14,11 @@
 # You should have received a copy of the GNU General Public License along with
 # ALIAS. If not, see <https://www.gnu.org/licenses/>. 
 
-'''Tools for injecting LASER technosignatures into APOGEE spectra.'''
+'''Tools for injecting LASER technosignatures into APOGEE spectra.
+
+This library provides functions for generating LASER technosignatures based on
+line-spread functions (LSFs) and injecting these into existing spectra for the
+purposes of testing methods for detecting them.'''
 
 import alias
 
@@ -31,8 +35,11 @@ class LSF:
         self.x = lsfx
         self.y = lsfy
 
-'''The default LSF derived from APOGEE DR12.'''
-defaultLSF = LSF(np.linspace(-7.,7.,43), 
+'''The default LSF derived from APOGEE DR12 data.
+
+This variable is provided for users not in possession of a more recent LSF.
+Users with a more recent one should use that instead.'''
+default_lsf = LSF(np.linspace(-7.,7.,43), 
                  [
                      0.00308409, 0.00349727, 0.00405324, 0.00471973,
                      0.00561687, 0.00755368, 0.01002816, 0.01260949,
@@ -48,19 +55,19 @@ defaultLSF = LSF(np.linspace(-7.,7.,43),
                  ]
 )
 
-#apogee_lsfx, apogee_lsfy = _loadLSF()
 
-def _createLaserSignature(wave, lsf, idx):
+def create_laser_signature(wave, lsf, idx):
+    '''Create a LASER technosignature from the given lsf.'''
     line = np.interp(np.array(range(len(wave)))-idx, lsf.x, lsf.y)
     return line
 
 def inject(dataset, lsf, specId, idx, amp):
+    '''Create a LASER technosignature and inject it into the given spectrum.'''
     nflux = np.copy(dataset.flux)
-    nflux[specId] += _createLaserSignature(dataset.wave, lsf, idx)*amp
+    nflux[specId] += create_laser_signature(dataset.wave, lsf, idx)*amp
     return alias.Dataset(dataset.wave, nflux, dataset.ivar)
 
 def injection_test(ds, lsf, detector, count, min_amp, max_amp):
-
     results = []
 
     for i in range(count):

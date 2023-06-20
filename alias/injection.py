@@ -21,6 +21,10 @@ import alias
 import numpy as np
 from astropy.io import fits
 
+import random as rand
+
+import tqdm.autonotebook as tqdm
+
 class LSF:
     '''Class to represent a line spread function (LSF).'''
     def __init__(self, lsfx, lsfy):
@@ -46,27 +50,36 @@ defaultLSF = LSF(np.linspace(-7.,7.,43),
 
 #apogee_lsfx, apogee_lsfy = _loadLSF()
 
-def _createLaserSignature(wave, lsf, wl):
-    idx = np.interp(wl, wave, range(len(wave)))
+def _createLaserSignature(wave, lsf, idx):
     line = np.interp(np.array(range(len(wave)))-idx, lsf.x, lsf.y)
     return line
 
-def inject(dataset, lsf, specId, wl, amp):
+def inject(dataset, lsf, specId, idx, amp):
     nflux = np.copy(dataset.flux)
-    nflux[specId] += _createLaserSignature(dataset.wave, lsf, wl)*amp
+    nflux[specId] += _createLaserSignature(dataset.wave, lsf, idx)*amp
     return alias.Dataset(dataset.wave, nflux, dataset.ivar)
 
-def inject_random(dataset, lsf, amp, num=1):
-    if not amp is tuple:
-        amp = (amp, amp)
-    nflux = dataset.flux
-    pos = []
-    for i in range(num):
-        specId = np.rand.randrange(len(dataset.flux))
-        line_amp = np.uniform(*amp)
-        line_wl = np.uniform(dataset.wave[0], dataset.wave[-1])
-        nflux[specId] += _createLaserSignature(dataset.wave, lsf, line_wl)*line_amp
-        pos += (specId, line_wl, line_amp)
-    return alias.Dataset(dataset.wave, nflux, dataset.ivar)
+def injection_test(ds, lsf, detector, count, min_amp, max_amp):
+
+    results = []
+
+    for i in range(count):
         
+        spec = rand.randrange(len(ds.flux))
+        valid_idx = np.nonzero(~np.isnan(ds.flux[spec]))[0]
+        idx_int = np.random.choice(valid_idx)
+        idx = idx_int + np.random.uniform(-0.5, 0.5)
+        wave = np.interp(idx, range(len(ds.wave)), ds.wave)
+        amp = np.random.uniform(min_amp, max_amp)
+    
+        nflux = np.copy(ds.flux[spec])
+        nflux += _createLaserSignature(ds.wave, lsf, idx)*amp
 
+        weirdness = detector(ds.wave, nflux, ds.ivar[spec])
+        
+        detected = sum(weirdness[idx_int-3:idx_int+4] > 1)
+        falsepos = sum(weirdness > 1) - detected
+
+        results.append((spec, wave, amp, detected > 0, falsepos))
+
+    return np.array(results)

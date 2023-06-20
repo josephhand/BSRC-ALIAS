@@ -57,15 +57,17 @@ def loadDataset(urls):
         spec_flux_parts = np.array(hdul[1].data)
         spec_ivar_parts = np.array(hdul[2].data)**-2
 
-        spec_flux = np.average(
-            spec_flux_parts,
-            axis=0, 
-            weights=spec_ivar_parts
-        )
-        spec_ivar = np.sum(spec_ivar_parts, axis=0)
+        #spec_flux = np.average(
+        #    spec_flux_parts,
+        #    axis=0, 
+        #    weights=spec_ivar_parts
+        #)
+        #spec_ivar = np.sum(spec_ivar_parts, axis=0)
+        spec_flux = spec_flux_parts[0]
+        spec_ivar = spec_ivar_parts[0]
         norm = np.nanmedian(spec_flux)
         spec_flux /= norm
-        spec_ivar /= norm
+        spec_ivar *= norm**2
 
         flux.append(spec_flux)
         ivar.append(spec_ivar)

@@ -10,5 +10,7 @@ build
 *.egg-info
 *.pyc
 
+docs/source/generated
+
 # Data products
 data

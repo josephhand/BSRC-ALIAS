@@ -1,9 +1,8 @@
-ALIAS API
-=========
+API
+===
 
 .. autosummary::
-   :toctree: alias
+   :toctree: generated
    :recursive:
 
    alias
-   alias.injection

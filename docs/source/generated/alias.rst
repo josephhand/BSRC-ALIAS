@@ -39,5 +39,6 @@
    :toctree:
    :recursive:
 
+   alias.core
    alias.injection
 

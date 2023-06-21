@@ -1,4 +1,4 @@
-﻿alias.injection
+alias.injection
 ===============
 
 .. automodule:: alias.injection

@@ -16,7 +16,7 @@
 
 '''ALIAS: Anomalous Lines In APOGEE Spectra'''
 
-import alias.injection
+# import injection
 
 
 import numpy as np
@@ -35,7 +35,7 @@ class Dataset:
     
     - **flux** A 2D numpy array with the relative flux values of each spectrum. These values
       are already normalized to have a median of 1.
-    
+    the
     - **ivar** A 2D numpy array containing the inverse-variances of each spectral element.
     '''
 

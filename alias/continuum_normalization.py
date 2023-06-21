@@ -1,5 +1,11 @@
 '''Small library for continuum normalizing APOGEE spectra'''
 
+import numpy as np
+
+import tqdm.autonotebook as tqdm
+
+import math
+
 def _continuum(flux, segment_len=100):
     '''Extract the continuum from a spectrum.'''
     flux = np.concatenate((flux, [math.nan]*(segment_len - len(flux) % segment_len)))

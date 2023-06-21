@@ -16,8 +16,7 @@
 
 '''ALIAS: Anomalous Lines In APOGEE Spectra'''
 
-# import injection
-
+__version__  = '0.0.2'
 
 import numpy as np
 from astropy.io import fits

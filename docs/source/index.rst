@@ -9,4 +9,6 @@ Welcome to ALIAS's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   usage
+   design
    api

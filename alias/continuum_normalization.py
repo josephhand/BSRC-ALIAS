@@ -55,5 +55,5 @@ def _continuum(flux, segment_len=100):
 # Function to continuum normalize a list of spectra
 def continuum_normalize(flux, ivar):
     '''Continuum normalize an array of spectra.'''
-    continuums = np.array([ _continuum(f) for f in tqdm.tqdm(flux) ])[:,range(len(flux[0]))]
+    continuums = np.array([ _continuum(f) for f in flux ])[:,range(len(flux[0]))]
     return flux/continuums, ivar*continuums**2, continuums

@@ -5,6 +5,7 @@ build:
   tools:
     python: "3.11"
   apt_packages:
+    - python3-ipython
     - pandoc
 
 sphinx:

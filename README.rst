@@ -41,7 +41,7 @@ Documentation can be found on the `Read the Docs page`_.
    Laser Emission Using Keck HIRES.
    https://arxiv.org/abs/1504.03369
 
--- [TELL2017] Tellis, N. K., & Marcy, G. W. 2017, The Astronomical Journal,
+.. [TELL2017] Tellis, N. K., & Marcy, G. W. 2017, The Astronomical Journal,
    153, 251,
    doi: 10.3847/1538-3881/aa6d12
 

@@ -6,7 +6,8 @@ ALIAS
    professional or academic setting in its current state.
 
 ALIAS (Anomalous Lines In Apogee Spectra) is a tool to detect and characterize
-unusual emission lines in APOGEE spectra. ALIAS is 
+unusual emission lines in APOGEE spectra, which could be potential
+technosignatures.
 
 Lasers serve as a highly efficient method of communication over interstellar
 distances due to their highly directional nature, and thus extraterrestrial

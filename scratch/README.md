@@ -1,9 +1,9 @@
 # Scratchwork
 
-This folder serves as a place for intermediate experimentation of algorithms.
+This folder serves as a place for intermediate experimentation with algorithms.
 Some of these will eventually end up in the main module.
 
-Here is a quick summary of what all the notebooks in this folder contain:
+Here is a quick summary of what the notebooks in this folder contain:
 
 - `continuum_normalize.ipynb`: A notebook implementing the continuum
   normalization algorithm used by ALIAS. This has already been implemented in

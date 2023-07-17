@@ -55,22 +55,14 @@ default_lsf = LSF(np.linspace(-7.,7.,43),
                  ]
 )
 
-
 def create_laser_signature(wave, lsf, idx):
-    '''Create a LASER technosignature from the given lsf.'''
     line = np.interp(np.array(range(len(wave)))-idx, lsf.x, lsf.y)
     return line
-
-def inject(dataset, lsf, specId, idx, amp):
-    '''Create a LASER technosignature and inject it into the given spectrum.'''
-    nflux = np.copy(dataset.flux)
-    nflux[specId] += create_laser_signature(dataset.wave, lsf, idx)*amp
-    return alias.Dataset(dataset.wave, nflux, dataset.ivar)
 
 def injection_test(ds, lsf, detector, count, min_amp, max_amp):
     results = []
 
-    for i in range(count):
+    for i in tqdm.trange(count):
         
         spec = rand.randrange(len(ds.flux))
         valid_idx = np.nonzero(~np.isnan(ds.flux[spec]))[0]
@@ -78,15 +70,27 @@ def injection_test(ds, lsf, detector, count, min_amp, max_amp):
         idx = idx_int + np.random.uniform(-0.5, 0.5)
         wave = np.interp(idx, range(len(ds.wave)), ds.wave)
         amp = np.random.uniform(min_amp, max_amp)
-    
+
         nflux = np.copy(ds.flux[spec])
-        nflux += _createLaserSignature(ds.wave, lsf, idx)*amp
-
-        weirdness = detector(ds.wave, nflux, ds.ivar[spec])
+        nflux += create_laser_signature(ds.wave, lsf, idx)*amp
         
-        detected = sum(weirdness[idx_int-3:idx_int+4] > 1)
-        falsepos = sum(weirdness > 1) - detected
+        detections = detector(ds.wave, nflux, ds.ivar[spec])
 
-        results.append((spec, wave, amp, detected > 0, falsepos))
+        if len(detections) == 0:
+            results.append((spec, idx, amp, 0, 0, 0, 0))
+            continue
 
-    return np.array(results)
+        detection_wavelengths = detections[:,0]
+        detection_amplitudes = detections[:,1]
+
+        detec_id = np.argmin(np.abs(detection_wavelengths - wave))
+        delta_wave = detection_wavelengths[detec_id] - wave
+
+        if np.abs(delta_wave) > 1:
+            results.append((spec, idx, amp, 0, 0, 0, len(detections)))
+            continue
+        
+        delta_flux = detection_amplitudes[detec_id] - amp
+        results.append((spec, idx, amp, 1, delta_wave, delta_flux, len(detections) - 1))
+
+    return np.array(results, dtype=float)

@@ -29,6 +29,8 @@ class Dataset:
 
     Once initialized, a Dataset object has the following members that can be accessed.
 
+    - **targets** A 2D numpy array containing properties of stars, extracted from the fits file
+
     - **wave** A 1D numpy array containing the wavelengths of each spectral element in every
       spectrum, measured in angstroms.
     
@@ -56,17 +58,18 @@ def loadDataset(urls):
         spec_flux_parts = np.array(hdul[1].data)
         spec_ivar_parts = np.array(hdul[2].data)**-2
 
-        #spec_flux = np.average(
-        #    spec_flux_parts,
-        #    axis=0, 
-        #    weights=spec_ivar_parts
-        #)
-        #spec_ivar = np.sum(spec_ivar_parts, axis=0)
-        spec_flux = spec_flux_parts[0]
-        spec_ivar = spec_ivar_parts[0]
-        norm = np.nanmedian(spec_flux)
-        spec_flux /= norm
-        spec_ivar *= norm**2
+        mask = np.isnan(spec_flux_parts) | np.isnan(spec_ivar_parts) | np.isinf(spec_ivar_parts)
+        masked_flux = np.ma.MaskedArray(spec_flux_parts, mask=mask)
+        masked_ivar = np.ma.MaskedArray(spec_ivar_parts, mask=mask)
+
+        spec_flux = np.average(
+            masked_flux,
+            axis=0, 
+            weights=masked_ivar
+        )
+        spec_ivar = np.sum(masked_ivar, axis=0)
+        #spec_flux = spec_flux_parts[0]
+        #spec_ivar = spec_ivar_parts[0]
 
         flux.append(spec_flux)
         ivar.append(spec_ivar)

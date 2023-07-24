@@ -22,10 +22,12 @@ import math
 import random as rand
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from astropy.io import fits
 import scipy.signal
+import scipy.optimize
 
 import tqdm.autonotebook as tqdm
 
@@ -56,66 +58,6 @@ default_lsf = LSF(np.linspace(-7.,7.,43),
                      0.00387761, 0.00336630, 0.00304458
                  ]
 )
-
-
-class Dataset:
-    '''A class to represent a collection of APOGEE spectra.
-
-    This class is designed to streamline the process of loading and collating
-    APOGEE spectra.
-
-    Once initialized, a Dataset object has the following members that can be accessed.
-
-    - **targets** A 2D numpy array containing properties of stars, extracted from the fits file
-
-    - **wave** A 1D numpy array containing the wavelengths of each spectral element in every
-      spectrum, measured in angstroms.
-    
-    - **flux** A 2D numpy array with the relative flux values of each spectrum. These values
-      are already normalized to have a median of 1.
-    the
-    - **ivar** A 2D numpy array containing the inverse-variances of each spectral element.
-    '''
-
-    def __init__(self, wave, flux, ivar):
-        self.wave = wave
-        self.flux = flux
-        self.ivar = ivar
-
-
-def loadDataset(urls):
-    '''Load a dataset from a list of urls or filepaths.'''
-    wave = None
-    flux = []
-    ivar = []
-
-    for i in range(len(urls)):
-        url = urls[i]
-        hdul = fits.open(url)
-
-        spec_flux_parts = np.array(hdul[1].data)
-        spec_ivar_parts = np.array(hdul[2].data)**-2
-
-        mask = np.isnan(spec_flux_parts) | np.isnan(spec_ivar_parts) | np.isinf(spec_ivar_parts)
-        masked_flux = np.ma.MaskedArray(spec_flux_parts, mask=mask)
-        masked_ivar = np.ma.MaskedArray(spec_ivar_parts, mask=mask)
-
-        spec_flux = np.average(
-            masked_flux,
-            axis=0, 
-            weights=masked_ivar
-        )
-        spec_ivar = np.sum(masked_ivar, axis=0)
-
-        flux.append(spec_flux)
-        ivar.append(spec_ivar)
-
-        if i == 0:
-            wave = 10**(hdul[1].header['CRVAL1'] + (hdul[1].header['CDELT1']
-                * np.arange(hdul[1].data.shape[1])))
-
-    return Dataset(wave, np.array(flux), np.array(ivar))
-
 
 def _extract_continuum(flux, segment_len=100):
     '''Extract the continuum from a spectrum.'''
@@ -149,83 +91,73 @@ def _extract_continuum(flux, segment_len=100):
 
 
 # Function to continuum normalize a list of spectra
-def continuum_normalize(ds):
+def continuum_normalize(data, flux_header='FLUX', flux_error_header='FLUX_ERR', norm_flux_header='NORM_FLUX', norm_flux_err_header='NORM_FLUX_ERR'):
     '''Continuum normalize an array of spectra.'''
-    continuums = np.array([ _extract_continuum(f) for f in ds.flux ])[:,range(len(ds.flux[0]))]
-    return Dataset(ds.wave, ds.flux/continuums, ds.ivar*continuums**2)
+    flux = data[flux_header]
+    flux_error = data[flux_error_header]
+    continuums = np.array([ _extract_continuum(f) for f in flux ])[:,range(len(flux[0]))]
+    norm_flux = [ flux[i]/continuums[i,:] for i in range(len(flux)) ]
+    norm_flux_error = [ flux_error[i]/continuums[i,:] for i in range(len(flux)) ]
+    data[norm_flux_header] = norm_flux
+    data[norm_flux_err_header] = norm_flux_error
 
-def get_residuals(ds):
-    masked_flux = np.ma.filled(np.ma.MaskedArray(ds.flux, ds.flux < 0.05), np.nan)
+def get_residuals(data, norm_flux_header='NORM_FLUX', residual_header='RESIDUALS'):
+    flux = np.array(list(data[norm_flux_header]), dtype=float)
+    masked_flux = np.ma.filled(np.ma.MaskedArray(flux, flux < 0.05), np.nan)
     median_flux = np.nanmedian(masked_flux, axis=0)
-    return Dataset(ds.wave, ds.flux - median_flux, ds.ivar)
-
-def detect(wave, flux, ivar):
-    peaks = scipy.signal.find_peaks(flux, height = 0.05)[0]
-    return peaks
+    data[residual_header] = list(flux - median_flux)
 
 
-def detect_all(ds):
+def detect(data, threshold, residual_header='RESIDUALS'):
 
     all_detections = []
     
-    for n in range(len(ds.flux)):
-        peaks = detect(ds.wave, ds.flux[n], ds.ivar[n])
+    residuals = np.array(list(data[residual_header]), dtype=float)
+    
+    for n, residual in enumerate(residuals):
+        peaks = scipy.signal.find_peaks(residual, height = threshold)[0]
         for peak in peaks:
             all_detections.append((n,peak))
 
-    return np.array(all_detections, dtype=int)
+    dataframe = pd.DataFrame(all_detections, columns=('SPECTRUM_ID', 'PIXEL'))
+
+    return dataframe
 
 
-def _chi2_lsf(y, y_err, lsfx, lsfy, amp, center_pix):
-    lsf = np.interp(range(len(y)), lsfx + center_pix, amp*lsfy)
-    return np.sum(((y - lsf)/y_err)**2)
+def gaussian_fit(wave, flux, peak_pixel):
 
-
-def _characterize_single(wave, flux, ivar, amp):
-    center_idx = np.linspace(len(wave)/2 - 1, len(wave)/2, 64)
+    # Find lower bound of event
+    l_bound = peak_pixel
+    while flux[l_bound] > flux[l_bound - 1]:
+        l_bound = l_bound - 1
+        
+    # Find upper bound of event
+    u_bound = peak_pixel + 1
+    while flux[u_bound - 1] > flux[u_bound]:
+        u_bound = u_bound + 1
     
-    chi2 = [ _chi2_lsf(flux, ivar**-0.5, default_lsf.x, np.array(default_lsf.y), 0.3, center) for center in center_idx ]
-    
-    best_idx = center_idx[np.argmin(chi2)]
-    best_wl = np.interp(best_idx, range(len(wave)), wave)
+    print((l_bound, u_bound))
 
-    # We can use our approximate guess of the amplitude to get a range to look for an improved amplitude
-    amps = np.linspace(amp * 0.7, amp*1.4, 64)
-    
-    chi2 = [ 
-        _chi2_lsf(flux, ivar**-0.5, default_lsf.x, np.array(default_lsf.y), amp, best_idx)
-        for amp in amps
-    ]
-    
-    best_amplitude = amps[np.argmin(chi2)]
+    wave_event = wave[l_bound:u_bound] - wave[peak_pixel]
+    flux_event = flux[l_bound:u_bound]
 
-    wave_idx = int(len(wave)/2)
+    def gaussian(x, amp, mean, sigma):
+        return amp * 2.71828**(-(x-mean)**2/(2*sigma**2))
 
-    min = wave_idx-1
-    while flux[min] > best_amplitude/2 and min > 0:
-        min = min-1
-    if min == 0:
-        wl_l = wave[0]
-    else:
-        wl_l = np.interp(best_amplitude/2, flux[min:min+2], wave[min:min+2])
-    
-    max = wave_idx+1
-    while flux[max] > best_amplitude/2 and max < len(wave) - 1:
-        max = max+1
-    if max == 0:
-        wl_h = wave[-1]
-    else:
-        wl_h = np.interp(best_amplitude/2, np.flip(flux[max-1:max+1]), np.flip(wave[max-1:max+1]))
+    params = scipy.optimize.curve_fit(
+        gaussian,
+        wave_event,
+        flux_event,
+        bounds = (
+            (0, wave[peak_pixel-2]-wave[peak_pixel], 0),
+            (np.inf, wave[peak_pixel+2]-wave[peak_pixel], np.inf)
+        )
+    )[0]
 
-    return best_wl, best_amplitude, wl_h-wl_l
+    mse = np.mean((flux_event - gaussian(wave_event, *params)) ** 2)
 
+    return list(params).append(mse)
 
-def characterize(wave, flux, ivar, peak):
-    peak_w = wave[peak-10:peak+11]
-    peak_f = flux[peak-10:peak+11]
-    peak_i = ivar[peak-10:peak+11]
-    nan_filter = np.isnan(peak_f) | np.isnan(peak_w) | np.isnan(peak_i)
-    return _characterize_single(peak_w[~nan_filter], peak_f[~nan_filter], peak_i[~nan_filter], flux[peak])
 
 def characterize_all(ds, detections):
     characterizations = np.array([

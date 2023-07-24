@@ -1,8 +1,5 @@
 API
 ===
 
-.. autosummary::
-   :toctree: generated
-   :recursive:
-
-   alias
+.. automodule:: alias
+   :members:

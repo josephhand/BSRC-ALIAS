@@ -9,7 +9,7 @@ authors = [
 ]
 description = "ALIAS: Anomalous Lines In APOGEE Spectra"
 readme = "README.rst"
-requires-python = ">=3.11"
+requires-python = ">=3.7"
 classifiers = [
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Intended Audience :: Science/Research",

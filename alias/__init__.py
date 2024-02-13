@@ -91,6 +91,12 @@ def _extract_continuum(flux, segment_len=100):
 
 
 # Function to continuum normalize a list of spectra
+def continuum_normalize_one(flux, flux_error):
+    continuum = _extract_continuum(flux)[range(len(flux))]
+    norm_flux = flux/continuum
+    norm_flux_error = flux_error/continuum
+    return norm_flux, norm_flux_error
+
 def continuum_normalize(data, flux_header='FLUX', flux_error_header='FLUX_ERR', norm_flux_header='NORM_FLUX', norm_flux_err_header='NORM_FLUX_ERR'):
     '''Continuum normalize an array of spectra.'''
     flux = data[flux_header]
@@ -107,6 +113,19 @@ def get_residuals(data, norm_flux_header='NORM_FLUX', residual_header='RESIDUALS
     median_flux = np.nanmedian(masked_flux, axis=0)
     data[residual_header] = list(flux - median_flux)
 
+def detect_one(data, spec_id, threshold, residual_header='RESIDUALS'):
+    
+    all_detections = []
+    
+    residual = data[residual_header][spec_id]
+    
+    peaks = scipy.signal.find_peaks(residual, height = threshold)[0]
+    for peak in peaks:
+        all_detections.append((spec_id,peak))
+
+    dataframe = pd.DataFrame(all_detections, columns=('SPECTRUM_ID', 'PIXEL'))
+
+    return dataframe
 
 def detect(data, threshold, residual_header='RESIDUALS'):
 
@@ -123,8 +142,16 @@ def detect(data, threshold, residual_header='RESIDUALS'):
 
     return dataframe
 
+def gaussian(x):
+    return 2.71828**(-x**2/2)
 
-def gaussian_fit(wave, flux, peak_pixel):
+gaussian_x = np.linspace(-30, 30, 1000)
+gaussian_y = gaussian(gaussian_x)
+
+def gaussian_interp(x, amp, mean, fwhm):
+    return amp * np.interp((x-mean)*2.355/fwhm, gaussian_x, gaussian_y)
+
+def gaussian_fit(wave, flux, flux_err, peak_pixel):
 
     # Find lower bound of event
     l_bound = peak_pixel
@@ -135,36 +162,42 @@ def gaussian_fit(wave, flux, peak_pixel):
     u_bound = peak_pixel + 1
     while flux[u_bound - 1] > flux[u_bound]:
         u_bound = u_bound + 1
+
+    wave_event = np.linspace(wave[l_bound], wave[u_bound-1], 30) - wave[peak_pixel]
+    flux_event = np.interp(wave_event + wave[peak_pixel], wave, flux)
+    flux_err_event = np.interp(wave_event + wave[peak_pixel], wave, flux_err)
+
+    maximum_width = (wave[u_bound-1] - wave[l_bound]) * 0.5
+
+    try:
+        params = scipy.optimize.curve_fit(
+            gaussian_interp,
+            wave_event,
+            flux_event,
+            bounds = (
+                (0, wave[peak_pixel-2]-wave[peak_pixel], 0),
+                (np.inf, wave[peak_pixel+2]-wave[peak_pixel], maximum_width)
+            ),
+            p0 = (flux[peak_pixel], 0, maximum_width/2)
+        )[0]
+    except RuntimeError:
+        return [0, 0, 0, -1]
+
+    mse = np.mean((flux_event - gaussian_interp(wave_event, *params)) ** 2)
+    #chi2 = np.sum(((flux_event - gaussian_interp(wave_event, *params))/flux_err_event) ** 2)/(len(wave_event) - 3)
     
-    print((l_bound, u_bound))
-
-    wave_event = wave[l_bound:u_bound] - wave[peak_pixel]
-    flux_event = flux[l_bound:u_bound]
-
-    def gaussian(x, amp, mean, sigma):
-        return amp * 2.71828**(-(x-mean)**2/(2*sigma**2))
-
-    params = scipy.optimize.curve_fit(
-        gaussian,
-        wave_event,
-        flux_event,
-        bounds = (
-            (0, wave[peak_pixel-2]-wave[peak_pixel], 0),
-            (np.inf, wave[peak_pixel+2]-wave[peak_pixel], np.inf)
-        )
-    )[0]
-
-    mse = np.mean((flux_event - gaussian(wave_event, *params)) ** 2)
-
-    return list(params).append(mse)
+    return list(params) + [mse]
 
 
-def characterize_all(ds, detections):
+def characterize_all(data, detections):
     characterizations = np.array([
-        list(d) + list(characterize(ds.wave, ds.flux[int(d[0])], ds.ivar[int(d[0])], int(d[1])))
-        for d in detections
-    ])
-    return characterizations
+        gaussian_fit(data['WAVE'][d['SPECTRUM_ID']], data['RESIDUALS'][d['SPECTRUM_ID']], data['NORM_FLUX_ERR'][d['SPECTRUM_ID']], d['PIXEL'])
+        for _, d in detections.iterrows()
+    ], dtype=float)
+    detections['FLUX'] = characterizations[:,0]
+    detections['WAVELENGTH_DELTA'] = characterizations[:,1]
+    detections['FWHM'] = characterizations[:,2]
+    detections['MSE'] = characterizations[:,3]
 
 #def auto_classify(ds, detections, characterizations):
     

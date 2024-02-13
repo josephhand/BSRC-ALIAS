@@ -2,8 +2,6 @@
 # Environment Internal Files
 .ipynb_checkpoints
 __pycache__
-covhtml
-.coverage
 build
 
 # Build Files
